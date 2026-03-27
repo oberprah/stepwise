@@ -152,15 +152,36 @@
 
   let audioCtx = null;
 
+  let silentAudio = null;
+
+  /**
+   * iOS mute-switch workaround: playing a silent <audio> element forces
+   * the audio session onto the media channel, which ignores the mute switch.
+   */
+  function unlockIOSAudio() {
+    if (silentAudio) return;
+    try {
+      silentAudio = document.createElement('audio');
+      // Tiny silent WAV (44 bytes) encoded as base64 data URI
+      silentAudio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+      silentAudio.loop = true;
+      silentAudio.volume = 0.01;
+      silentAudio.setAttribute('playsinline', '');
+      silentAudio.play().catch(() => {});
+    } catch (_) {}
+  }
+
   /** Lazy-init AudioContext (must be triggered by user gesture). */
   function ensureAudioCtx() {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    // Resume if suspended (Safari requirement)
-    if (audioCtx.state === 'suspended') {
+    // Resume if suspended or interrupted (Safari requirement)
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
       audioCtx.resume();
     }
+    // iOS: force media channel to bypass mute switch
+    unlockIOSAudio();
   }
 
   /**
@@ -686,6 +707,19 @@
   function bindEvents() {
     // --- List screen ---
     btnNewRoutine.addEventListener('click', () => openEditor(null));
+
+    // Test sound button
+    document.getElementById('btn-test-sound').addEventListener('click', () => {
+      ensureAudioCtx();
+      beep(880, 0.3);
+      const btn = document.getElementById('btn-test-sound');
+      btn.classList.add('sound-ok');
+      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg> Sound OK';
+      setTimeout(() => {
+        btn.classList.remove('sound-ok');
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg> Test Sound';
+      }, 2000);
+    });
 
     routineListEl.addEventListener('click', (e) => {
       // Edit button
