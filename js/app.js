@@ -45,8 +45,13 @@
     if (!('wakeLock' in navigator)) return;
     try {
       wakeLock = await navigator.wakeLock.request('screen');
-      // Re-acquire if the page becomes visible again (system released it)
-      wakeLock.addEventListener('release', () => { wakeLock = null; });
+      wakeLock.addEventListener('release', () => {
+        wakeLock = null;
+        // Re-acquire if the system dropped it while we're still playing
+        if (isPlaying && screens.player.classList.contains('active')) {
+          requestWakeLock();
+        }
+      });
     } catch (_) { /* denied or unavailable */ }
   }
 
