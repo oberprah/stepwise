@@ -152,25 +152,6 @@
 
   let audioCtx = null;
 
-  let silentAudio = null;
-
-  /**
-   * iOS mute-switch workaround: playing a silent <audio> element forces
-   * the audio session onto the media channel, which ignores the mute switch.
-   */
-  function unlockIOSAudio() {
-    if (silentAudio) return;
-    try {
-      silentAudio = document.createElement('audio');
-      // Tiny silent WAV (44 bytes) encoded as base64 data URI
-      silentAudio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-      silentAudio.loop = true;
-      silentAudio.volume = 0.01;
-      silentAudio.setAttribute('playsinline', '');
-      silentAudio.play().catch(() => {});
-    } catch (_) {}
-  }
-
   /** Lazy-init AudioContext (must be triggered by user gesture). */
   function ensureAudioCtx() {
     if (!audioCtx) {
@@ -180,8 +161,6 @@
     if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
       audioCtx.resume();
     }
-    // iOS: force media channel to bypass mute switch
-    unlockIOSAudio();
   }
 
   /**
@@ -212,6 +191,24 @@
     beep(880, 0.15);
     setTimeout(() => beep(880, 0.15), 250);
     setTimeout(() => beep(1200, 0.3), 500);
+  }
+
+  /** 3 ascending beeps – signals start of a work/exercise phase. */
+  function beepWork() {
+    beep(660, 0.12);
+    setTimeout(() => beep(880, 0.12), 180);
+    setTimeout(() => beep(1100, 0.18), 360);
+  }
+
+  /** 2 low beeps – signals start of a rest phase. */
+  function beepRest() {
+    beep(440, 0.15);
+    setTimeout(() => beep(440, 0.15), 250);
+  }
+
+  /** Single gentle beep – signals the midpoint of a timed exercise. */
+  function beepMidpoint() {
+    beep(660, 0.25);
   }
 
   // ---------------------------------------------------------------------------
@@ -597,8 +594,13 @@
       else if (timeRemaining === 2) beep(660, 0.15);
       else if (timeRemaining === 1) beep(880, 0.2);
 
+      // Midpoint beep for timed exercises (switch sides reminder)
+      if (!isRestPhase && totalTime >= 20) {
+        const mid = Math.floor(totalTime / 2);
+        if (timeRemaining === mid) beepMidpoint();
+      }
+
       if (timeRemaining <= 0) {
-        beep(1100, 0.25);
         advanceStep();
       }
     }
@@ -612,6 +614,7 @@
     if (!isRestPhase && ex.rest > 0) {
       // Enter rest phase for this exercise
       isRestPhase = true;
+      beepRest();
       loadCurrentStep();
       return;
     }
@@ -626,6 +629,7 @@
       return;
     }
 
+    beepWork();
     loadCurrentStep();
   }
 
