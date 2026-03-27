@@ -441,9 +441,7 @@ button {
 
 .exercise-row-name {
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .exercise-row-detail {
@@ -787,6 +785,20 @@ button {
     --ring-size: 200px;
     --font-size-timer: 3rem;
     --font-size-2xl: 1.5rem;
+  }
+}
+
+/* On narrow screens the action buttons eat too much horizontal space –
+   wrap them onto a second line so the exercise name gets full width. */
+@media (max-width: 480px) {
+  .exercise-row {
+    flex-wrap: wrap;
+  }
+
+  .exercise-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: var(--space-xs);
   }
 }
 

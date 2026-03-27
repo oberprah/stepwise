@@ -38,6 +38,32 @@
   let editorExercises = [];  // Temporary exercise list while editing
   let editingExerciseIdx = -1; // Index of exercise being edited in modal (-1 = new)
 
+  // Wake lock
+  let wakeLock = null;
+
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      // Re-acquire if the page becomes visible again (system released it)
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (_) { /* denied or unavailable */ }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release();
+      wakeLock = null;
+    }
+  }
+
+  // Re-acquire wake lock when the page becomes visible again
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isPlaying && screens.player.classList.contains('active')) {
+      requestWakeLock();
+    }
+  });
+
   // Player state
   let currentRoutine = null;
   let currentExIdx = 0;
@@ -440,6 +466,7 @@
     isPlaying = true;
     routineStartTime = Date.now();
 
+    requestWakeLock();
     playerRoutineName.textContent = currentRoutine.name;
     showScreen('player');
     loadCurrentStep();
@@ -539,13 +566,13 @@
       updateTimerDisplay();
       setRingProgress(timeRemaining / totalTime);
 
-      // Beep on last 3 seconds
-      if (timeRemaining <= 3 && timeRemaining > 0) {
-        beep(660, 0.1);
-      }
+      // Countdown beep: ascending pitch for 3, 2, 1
+      if (timeRemaining === 3) beep(550, 0.15);
+      else if (timeRemaining === 2) beep(660, 0.15);
+      else if (timeRemaining === 1) beep(880, 0.2);
 
       if (timeRemaining <= 0) {
-        beep(880, 0.2);
+        beep(1100, 0.25);
         advanceStep();
       }
     }
@@ -579,6 +606,7 @@
   function finishRoutine() {
     stopTimer();
     isPlaying = false;
+    releaseWakeLock();
     beepComplete();
 
     const elapsed = Math.round((Date.now() - routineStartTime) / 1000);
@@ -611,6 +639,7 @@
   function exitPlayer() {
     stopTimer();
     isPlaying = false;
+    releaseWakeLock();
     currentRoutine = null;
     showScreen('list');
   }
