@@ -151,16 +151,37 @@
   // ---------------------------------------------------------------------------
 
   let audioCtx = null;
+  let suspendTimer = null;
 
   /** Lazy-init AudioContext (must be triggered by user gesture). */
   function ensureAudioCtx() {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Tell Safari this is short transient audio, not music playback.
+      // This avoids pausing Spotify / background music.
+      if ('audioSession' in navigator) {
+        navigator.audioSession.type = 'transient';
+      }
     }
     // Resume if suspended or interrupted (Safari requirement)
     if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
       audioCtx.resume();
     }
+    // Cancel any pending suspend so beep plays fully
+    clearTimeout(suspendTimer);
+  }
+
+  /**
+   * Suspend AudioContext shortly after beeping to release audio focus.
+   * This lets background music (Spotify etc.) resume quickly.
+   */
+  function scheduleSuspend(delayMs) {
+    clearTimeout(suspendTimer);
+    suspendTimer = setTimeout(() => {
+      if (audioCtx && audioCtx.state === 'running') {
+        audioCtx.suspend();
+      }
+    }, delayMs);
   }
 
   /**
@@ -181,6 +202,8 @@
       gain.connect(audioCtx.destination);
       osc.start(audioCtx.currentTime);
       osc.stop(audioCtx.currentTime + dur);
+      // Auto-suspend after beep finishes to release audio focus
+      scheduleSuspend((dur + 0.1) * 1000);
     } catch (_) {
       // Silently fail if audio is unavailable
     }
@@ -191,6 +214,7 @@
     beep(880, 0.15);
     setTimeout(() => beep(880, 0.15), 250);
     setTimeout(() => beep(1200, 0.3), 500);
+    scheduleSuspend(900);
   }
 
   /** 3 ascending beeps – signals start of a work/exercise phase. */
@@ -198,12 +222,14 @@
     beep(660, 0.12);
     setTimeout(() => beep(880, 0.12), 180);
     setTimeout(() => beep(1100, 0.18), 360);
+    scheduleSuspend(650);
   }
 
   /** 2 low beeps – signals start of a rest phase. */
   function beepRest() {
     beep(440, 0.15);
     setTimeout(() => beep(440, 0.15), 250);
+    scheduleSuspend(500);
   }
 
   /** Single gentle beep – signals the midpoint of a timed exercise. */
