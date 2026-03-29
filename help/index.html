@@ -19,7 +19,7 @@
 </head>
 <body>
 
-<h1>Stretch Timer — URL API</h1>
+<h1>Stepwise — URL API</h1>
 <p class="subtitle">Load routines via URL for AI agents and automation</p>
 
 <h2>Usage</h2>
@@ -31,44 +31,90 @@
 <pre><code>https://&lt;host&gt;/?routine=&lt;base64-encoded-json&gt;</code></pre>
 
 <h2>JSON Schema</h2>
+<p>
+  A routine contains an <code>items</code> array. Each item is either a standalone
+  <strong>exercise</strong> or a <strong>group</strong> of exercises that repeats for
+  multiple rounds.
+</p>
 <pre><code>{
   "name": "string (required, max 50 chars)",
-  "exercises": [
+  "items": [
+    // Timed exercise:
     {
       "name":     "string (required, max 60 chars)",
-      "type":     "time" | "reps" (required),
-      "duration": number (seconds, 5–600, required when type="time"),
-      "reps":     number (1–200, required when type="reps"),
-      "rest":     number (seconds, 0–120, optional, default 0)
+      "type":     "time",
+      "duration": number (seconds, 5–600)
+    },
+    // Rep-based exercise:
+    {
+      "name":     "string (required, max 60 chars)",
+      "type":     "reps",
+      "reps":     number (1–200)
+    },
+    // Pause (timed break):
+    {
+      "name":     "string (required, e.g. 'Pause')",
+      "type":     "pause",
+      "duration": number (seconds, 5–600)
+    },
+    // Exercise group (repeats all exercises for N rounds):
+    {
+      "type":      "group",
+      "name":      "string (required, max 50 chars)",
+      "rounds":    number (2–20),
+      "exercises": [ /* same exercise/pause formats as above */ ]
     }
   ]
 }</code></pre>
 <p>
   No <code>id</code> field needed — one is generated automatically.
-  At least one exercise is required.
-  Fields irrelevant to the type (e.g. <code>duration</code> for <code>reps</code>) are ignored.
+  At least one item is required. Three exercise types are supported:
+  <code>time</code> (countdown), <code>reps</code> (manual completion),
+  and <code>pause</code> (rest break with countdown).
+  The legacy <code>"exercises"</code> key (flat array) is still accepted for backwards
+  compatibility.
 </p>
 
-<h2>Example</h2>
-<p>Routine JSON:</p>
+<h2>Example — Simple (no groups)</h2>
 <pre><code>{
   "name": "Quick Stretch",
-  "exercises": [
-    { "name": "Neck Rolls",        "type": "reps", "reps": 10, "rest": 5 },
-    { "name": "Hamstring Stretch",  "type": "time", "duration": 30, "rest": 10 },
+  "items": [
+    { "name": "Neck Rolls",        "type": "reps", "reps": 10 },
+    { "name": "Pause",             "type": "pause", "duration": 5 },
+    { "name": "Hamstring Stretch",  "type": "time", "duration": 30 },
+    { "name": "Pause",             "type": "pause", "duration": 10 },
     { "name": "Deep Breathing",     "type": "time", "duration": 60 }
   ]
 }</code></pre>
 
-<p>Base64 encode and append to URL:</p>
-<pre><code>echo '{"name":"Quick Stretch","exercises":[{"name":"Neck Rolls","type":"reps","reps":10,"rest":5},{"name":"Hamstring Stretch","type":"time","duration":30,"rest":10},{"name":"Deep Breathing","type":"time","duration":60}]}' | base64</code></pre>
+<h2>Example — With Groups</h2>
+<pre><code>{
+  "name": "Circuit Training",
+  "items": [
+    { "name": "Warm Up",  "type": "time", "duration": 300 },
+    {
+      "type": "group",
+      "name": "Main Circuit",
+      "rounds": 3,
+      "exercises": [
+        { "name": "Push Ups",  "type": "reps", "reps": 10 },
+        { "name": "Pause",     "type": "pause", "duration": 10 },
+        { "name": "Pull Ups",  "type": "reps", "reps": 8 },
+        { "name": "Pause",     "type": "pause", "duration": 10 },
+        { "name": "Abs",       "type": "time", "duration": 30 },
+        { "name": "Pause",     "type": "pause", "duration": 60 }
+      ]
+    },
+    { "name": "Cool Down", "type": "time", "duration": 120 }
+  ]
+}</code></pre>
 
-<p>Or in JavaScript:</p>
+<p>Base64 encode and append to URL:</p>
 <pre><code>const url = baseURL + '?routine=' + btoa(JSON.stringify(routine));</code></pre>
 
 <h2>For AI Agents</h2>
 <p>
-  To create and launch a stretch routine:
+  To create and launch a routine:
 </p>
 <ol>
   <li>Build a routine JSON object matching the schema above</li>
