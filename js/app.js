@@ -1505,11 +1505,12 @@
 
   function validateExercise(ex) {
     if (!ex || typeof ex !== 'object') return null;
-    if (typeof ex.name !== 'string' || ex.name.trim() === '') return null;
     if (ex.type !== 'time' && ex.type !== 'reps' && ex.type !== 'pause') return null;
+    // Name is optional for pause, required for others
+    if (ex.type !== 'pause' && (typeof ex.name !== 'string' || ex.name.trim() === '')) return null;
 
     const clean = {
-      name: ex.name.trim().slice(0, 60),
+      name: ex.type === 'pause' ? 'Pause' : ex.name.trim().slice(0, 60),
       type: ex.type,
       duration: 0,
       reps: 0,

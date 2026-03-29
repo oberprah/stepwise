@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stretch Timer — URL API</title>
+  <title>Stepwise — URL API</title>
   <link rel="stylesheet" href="../css/style.css">
   <style>
     body { padding: 1.5em; max-width: 700px; margin: 0 auto; }
@@ -51,9 +51,8 @@
       "type":     "reps",
       "reps":     number (1–200)
     },
-    // Pause (timed break):
+    // Pause (timed break, name is optional – defaults to "Pause"):
     {
-      "name":     "string (required, e.g. 'Pause')",
       "type":     "pause",
       "duration": number (seconds, 5–600)
     },
@@ -80,9 +79,9 @@
   "name": "Quick Stretch",
   "items": [
     { "name": "Neck Rolls",        "type": "reps", "reps": 10 },
-    { "name": "Pause",             "type": "pause", "duration": 5 },
+    { "type": "pause", "duration": 5 },
     { "name": "Hamstring Stretch",  "type": "time", "duration": 30 },
-    { "name": "Pause",             "type": "pause", "duration": 10 },
+    { "type": "pause", "duration": 10 },
     { "name": "Deep Breathing",     "type": "time", "duration": 60 }
   ]
 }</code></pre>
@@ -98,11 +97,11 @@
       "rounds": 3,
       "exercises": [
         { "name": "Push Ups",  "type": "reps", "reps": 10 },
-        { "name": "Pause",     "type": "pause", "duration": 10 },
+        { "type": "pause", "duration": 10 },
         { "name": "Pull Ups",  "type": "reps", "reps": 8 },
-        { "name": "Pause",     "type": "pause", "duration": 10 },
+        { "type": "pause", "duration": 10 },
         { "name": "Abs",       "type": "time", "duration": 30 },
-        { "name": "Pause",     "type": "pause", "duration": 60 }
+        { "type": "pause", "duration": 60 }
       ]
     },
     { "name": "Cool Down", "type": "time", "duration": 120 }
@@ -123,7 +122,7 @@
 </ol>
 <p>The player starts immediately — no user interaction needed beyond the initial page load.</p>
 
-<p><a href="../">← Back to Stretch Timer</a></p>
+<p><a href="../">← Back to Stepwise</a></p>
 
 </body>
 </html>
