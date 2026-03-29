@@ -3,7 +3,7 @@
    ========================================================================== */
 
 :root {
-  /* Primary palette – calming teals/greens */
+  /* Primary palette */
   --color-primary: #4ECDC4;
   --color-primary-dark: #3AB5AD;
   --color-primary-light: #A8E6CF;
@@ -93,6 +93,7 @@
 html {
   font-size: 16px;
   -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -117,7 +118,7 @@ button {
 }
 
 /* ==========================================================================
-   Screens – view switching
+   Screens
    ========================================================================== */
 
 .screen {
@@ -259,9 +260,9 @@ button {
 }
 
 .app-title {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-3xl);
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -1px;
   color: var(--color-text);
 }
 
@@ -281,45 +282,47 @@ button {
   width: 100%;
 }
 
+/* --- Swipe container (shared by cards & exercise items) --- */
+
+.swipe-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.swipe-delete-zone {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 90px;
+  background: var(--color-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+
+.swipe-content {
+  position: relative;
+  z-index: 1;
+  background: var(--color-surface);
+  transition: transform 0.25s ease;
+}
+
+.swipe-content.swiping {
+  transition: none;
+}
+
 /* Routine card */
 .routine-card {
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
   padding: var(--space-lg);
   display: flex;
   align-items: center;
   gap: var(--space-md);
   cursor: pointer;
-  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
-  position: relative;
-}
-
-.routine-card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-
-.routine-card:active {
-  transform: scale(0.98);
-}
-
-.routine-card-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-sm);
-  background: var(--color-primary-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--color-primary-dark);
-}
-
-@media (prefers-color-scheme: dark) {
-  .routine-card-icon {
-    background: rgba(78, 205, 196, 0.15);
-  }
 }
 
 .routine-card-info {
@@ -341,9 +344,8 @@ button {
   margin-top: 2px;
 }
 
-.routine-card-actions {
-  display: flex;
-  gap: var(--space-xs);
+.routine-card-chevron {
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
@@ -360,10 +362,10 @@ button {
 }
 
 /* ==========================================================================
-   SCREEN: Editor
+   SCREEN: Detail (editor + overview combined)
    ========================================================================== */
 
-.editor-header {
+.detail-header {
   display: flex;
   align-items: center;
   padding: var(--space-md);
@@ -375,95 +377,221 @@ button {
   z-index: 5;
 }
 
-.editor-title {
+.detail-name-input {
   flex: 1;
+  border: none;
+  background: transparent;
   font-size: var(--font-size-lg);
   font-weight: 700;
-  text-align: center;
+  padding: var(--space-xs) var(--space-sm);
+  outline: none;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
 }
 
-.editor-body {
-  padding: var(--space-lg);
+.detail-name-input:focus {
+  background: var(--color-surface-hover);
+}
+
+.detail-name-input:read-only {
+  pointer-events: none;
+}
+
+.btn-start {
+  border-radius: var(--radius-lg);
+  padding: var(--space-sm) var(--space-lg);
+  font-weight: 700;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.detail-body {
+  flex: 1;
+  padding: var(--space-md);
+  padding-bottom: 100px;
   max-width: 540px;
   margin: 0 auto;
   width: 100%;
-  padding-bottom: 100px;
 }
 
-.form-group {
-  margin-bottom: var(--space-lg);
-}
-
-.form-group label {
-  display: block;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.exercise-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-md);
-}
-
-.exercise-list-header h3 {
-  font-size: var(--font-size-lg);
-  font-weight: 700;
-}
-
-.exercise-list-editor {
+.detail-exercise-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: 2px;
 }
 
-/* Exercise row in editor */
-.exercise-row {
-  background: var(--color-surface);
+/* --- Exercise item (inside detail screen) --- */
+
+.exercise-item {
+  position: relative;
+  overflow: hidden;
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-  padding: var(--space-md);
+}
+
+.exercise-item-delete {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: var(--color-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+
+.exercise-item-content {
+  position: relative;
+  z-index: 1;
+  background: var(--color-surface);
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  transition: box-shadow var(--transition-fast);
+  padding: var(--space-md);
+  min-height: 56px;
+  transition: transform 0.25s ease;
+  cursor: pointer;
 }
 
-.exercise-row-info {
-  flex: 1;
-  min-width: 0;
+.exercise-item-content.swiping {
+  transition: none;
 }
 
-.exercise-row-name {
-  font-weight: 600;
-  word-break: break-word;
-}
-
-.exercise-row-detail {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.exercise-row-actions {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.exercise-row-handle {
+.exercise-item-handle {
   color: var(--color-text-muted);
   cursor: grab;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
+  touch-action: none;
   padding: var(--space-xs);
 }
 
-/* Toggle group (time / reps) */
+.exercise-item-handle:active {
+  cursor: grabbing;
+}
+
+.exercise-item-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: var(--font-size-base);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exercise-item-badge {
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  background: rgba(78, 205, 196, 0.12);
+  padding: 2px 10px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .exercise-item-badge {
+    background: rgba(78, 205, 196, 0.15);
+    color: var(--color-primary);
+  }
+}
+
+/* Overview mode status indicators */
+.exercise-item-status {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.exercise-item.current {
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+}
+
+.exercise-item.current .exercise-item-content {
+  background: transparent;
+}
+
+.exercise-item.current .exercise-item-name {
+  color: #fff;
+}
+
+.exercise-item.current .exercise-item-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.exercise-item.current .exercise-item-status {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.exercise-item.done {
+  opacity: 0.4;
+}
+
+.exercise-item.done .exercise-item-status {
+  color: var(--color-primary);
+}
+
+/* Add exercise button (inline) */
+.btn-add-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  background: transparent;
+  cursor: pointer;
+  min-height: 48px;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-add-inline:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* Drag placeholder */
+.drag-placeholder {
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: rgba(78, 205, 196, 0.06);
+  transition: height var(--transition-fast);
+}
+
+.exercise-item.dragging {
+  position: fixed;
+  z-index: 1000;
+  box-shadow: var(--shadow-lg);
+  opacity: 0.92;
+  pointer-events: none;
+  border-radius: var(--radius-sm);
+}
+
+/* ==========================================================================
+   Toggle group (time / reps)
+   ========================================================================== */
+
 .toggle-group {
   display: flex;
   border: 2px solid var(--color-border);
@@ -489,6 +617,24 @@ button {
 }
 
 /* ==========================================================================
+   Form groups (used in modals)
+   ========================================================================== */
+
+.form-group {
+  margin-bottom: var(--space-lg);
+}
+
+.form-group label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
    SCREEN: Player
    ========================================================================== */
 
@@ -499,22 +645,39 @@ button {
   gap: var(--space-sm);
 }
 
-.player-routine-name {
+.player-header-center {
   flex: 1;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  min-height: 0;
+  transition: background var(--transition-fast);
+}
+
+.player-header-center:hover {
+  background: var(--color-surface-hover);
+}
+
+.player-routine-name {
   font-weight: 700;
   font-size: var(--font-size-base);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
+  color: var(--color-text);
 }
 
 .player-progress {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   white-space: nowrap;
-  min-width: 48px;
-  text-align: right;
 }
 
 .player-body {
@@ -552,7 +715,6 @@ button {
   stroke: var(--ring-color);
   stroke-width: var(--ring-stroke);
   stroke-linecap: round;
-  /* circumference = 2 * PI * 90 ~= 565.49 */
   stroke-dasharray: 565.49;
   stroke-dashoffset: 0;
   transition: stroke-dashoffset 0.3s linear;
@@ -788,35 +950,14 @@ button {
   }
 }
 
-/* On narrow screens the action buttons eat too much horizontal space –
-   wrap them onto a second line so the exercise name gets full width. */
-@media (max-width: 480px) {
-  .exercise-row {
-    flex-wrap: wrap;
-  }
-
-  .exercise-row-actions {
-    width: 100%;
-    justify-content: flex-end;
-    margin-top: var(--space-xs);
-  }
-}
-
 /* ==========================================================================
    Utility / Misc
    ========================================================================== */
 
-/* Smooth scroll for the whole page */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Prevent body scrolling when modal is open */
 body.modal-open {
   overflow: hidden;
 }
 
-/* Screen reader only */
 .sr-only {
   position: absolute;
   width: 1px;

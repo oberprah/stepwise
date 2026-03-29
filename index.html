@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="description" content="A simple stretching routine timer to guide your daily stretches.">
+  <meta name="description" content="A simple routine timer for workouts, stretching, and more.">
   <meta name="theme-color" content="#4ECDC4">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>Stretch Timer</title>
+  <title>Stepwise</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -15,8 +15,8 @@
   <!-- ==================== ROUTINE LIST SCREEN ==================== -->
   <div id="screen-list" class="screen active">
     <header class="app-header">
-      <h1 class="app-title">Stretch Timer</h1>
-      <p class="app-subtitle">Pick a routine and start stretching</p>
+      <h1 class="app-title">Stepwise</h1>
+      <p class="app-subtitle">Pick a routine and get started</p>
     </header>
 
     <div id="routine-list" class="routine-list">
@@ -28,30 +28,25 @@
     </button>
   </div>
 
-  <!-- ==================== ROUTINE EDITOR SCREEN ==================== -->
-  <div id="screen-editor" class="screen">
-    <header class="editor-header">
-      <button id="btn-editor-back" class="btn btn-icon" aria-label="Back">
+  <!-- ==================== DETAIL SCREEN (editor + overview) ==================== -->
+  <div id="screen-detail" class="screen">
+    <header class="detail-header">
+      <button id="btn-detail-back" class="btn btn-icon" aria-label="Back">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <h2 class="editor-title" id="editor-title">New Routine</h2>
-      <button id="btn-save-routine" class="btn btn-text">Save</button>
+      <input type="text" id="detail-routine-name" class="detail-name-input" placeholder="Routine name" maxlength="50">
+      <button id="btn-detail-start" class="btn btn-primary btn-start">Start</button>
     </header>
 
-    <div class="editor-body">
-      <div class="form-group">
-        <label for="routine-name">Routine Name</label>
-        <input type="text" id="routine-name" class="input" placeholder="e.g. Morning Stretch" maxlength="50">
-      </div>
-
-      <div class="exercise-list-header">
-        <h3>Exercises</h3>
-        <button id="btn-add-exercise" class="btn btn-small btn-outline">+ Add</button>
-      </div>
-
-      <div id="exercise-list-editor" class="exercise-list-editor">
+    <div class="detail-body">
+      <div id="detail-exercise-list" class="detail-exercise-list">
         <!-- Exercise rows rendered by JS -->
       </div>
+
+      <button id="btn-detail-add" class="btn btn-add-inline">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Exercise
+      </button>
     </div>
   </div>
 
@@ -61,8 +56,10 @@
       <button id="btn-player-back" class="btn btn-icon" aria-label="Stop and go back">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <span id="player-routine-name" class="player-routine-name"></span>
-      <span id="player-progress" class="player-progress"></span>
+      <button id="btn-player-overview" class="player-header-center" aria-label="Show exercise overview">
+        <span id="player-routine-name" class="player-routine-name"></span>
+        <span id="player-progress" class="player-progress"></span>
+      </button>
     </header>
 
     <div class="player-body">

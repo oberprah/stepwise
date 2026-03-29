@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Stretch Timer – Main Application Logic
+   Stepwise – Main Application Logic
    Pure vanilla JS, no dependencies.
    ========================================================================== */
 
@@ -11,9 +11,9 @@
   // ---------------------------------------------------------------------------
 
   const STORAGE_KEY = 'stretch-timer-routines';
-  const CIRCUMFERENCE = 2 * Math.PI * 90; // matches SVG circle r=90
+  const CIRCUMFERENCE = 2 * Math.PI * 90;
+  const SWIPE_THRESHOLD = 60;
 
-  // Pre-built example routine
   const DEFAULT_ROUTINE = {
     id: 'default-morning',
     name: 'Morning Stretch',
@@ -29,14 +29,52 @@
     ],
   };
 
+  const DEFAULT_ROUTINE_2 = {
+    id: 'default-full-body',
+    name: 'Full Body Workout',
+    exercises: [
+      { name: 'Jumping Jacks',          type: 'time', reps: 0,  duration: 45, rest: 15 },
+      { name: 'High Knees',             type: 'time', reps: 0,  duration: 30, rest: 10 },
+      { name: 'Push-ups',               type: 'reps', reps: 12, duration: 0,  rest: 20 },
+      { name: 'Squats',                 type: 'reps', reps: 15, duration: 0,  rest: 20 },
+      { name: 'Plank',                  type: 'time', reps: 0,  duration: 45, rest: 15 },
+      { name: 'Lunges (left leg)',       type: 'reps', reps: 10, duration: 0,  rest: 10 },
+      { name: 'Lunges (right leg)',      type: 'reps', reps: 10, duration: 0,  rest: 20 },
+      { name: 'Burpees',                type: 'reps', reps: 8,  duration: 0,  rest: 30 },
+      { name: 'Mountain Climbers',      type: 'time', reps: 0,  duration: 30, rest: 15 },
+      { name: 'Tricep Dips',            type: 'reps', reps: 12, duration: 0,  rest: 20 },
+      { name: 'Glute Bridges',          type: 'reps', reps: 15, duration: 0,  rest: 15 },
+      { name: 'Side Plank (left)',       type: 'time', reps: 0,  duration: 30, rest: 10 },
+      { name: 'Side Plank (right)',      type: 'time', reps: 0,  duration: 30, rest: 20 },
+      { name: 'Superman Hold',          type: 'time', reps: 0,  duration: 30, rest: 15 },
+      { name: 'Bicycle Crunches',       type: 'reps', reps: 20, duration: 0,  rest: 15 },
+      { name: 'Jump Squats',            type: 'reps', reps: 10, duration: 0,  rest: 30 },
+      { name: 'Inchworms',              type: 'reps', reps: 8,  duration: 0,  rest: 15 },
+      { name: 'Push-ups (wide grip)',   type: 'reps', reps: 10, duration: 0,  rest: 20 },
+      { name: 'Wall Sit',               type: 'time', reps: 0,  duration: 45, rest: 20 },
+      { name: 'Reverse Crunches',       type: 'reps', reps: 15, duration: 0,  rest: 15 },
+      { name: 'Lateral Shuffles',       type: 'time', reps: 0,  duration: 30, rest: 15 },
+      { name: 'Diamond Push-ups',       type: 'reps', reps: 8,  duration: 0,  rest: 20 },
+      { name: 'Squat Hold',             type: 'time', reps: 0,  duration: 30, rest: 15 },
+      { name: 'Leg Raises',             type: 'reps', reps: 12, duration: 0,  rest: 15 },
+      { name: 'Bear Crawl',             type: 'time', reps: 0,  duration: 20, rest: 15 },
+      { name: 'Hip Circles',            type: 'reps', reps: 10, duration: 0,  rest: 10 },
+      { name: 'Calf Raises',            type: 'reps', reps: 20, duration: 0,  rest: 10 },
+      { name: 'Donkey Kicks (left)',     type: 'reps', reps: 12, duration: 0,  rest: 10 },
+      { name: 'Donkey Kicks (right)',    type: 'reps', reps: 12, duration: 0,  rest: 15 },
+      { name: 'Cool Down Walk',         type: 'time', reps: 0,  duration: 60, rest: 0  },
+    ],
+  };
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
 
-  let routines = [];         // Array of routine objects
-  let editingRoutineId = null; // ID of routine being edited, or null for new
-  let editorExercises = [];  // Temporary exercise list while editing
-  let editingExerciseIdx = -1; // Index of exercise being edited in modal (-1 = new)
+  let routines = [];
+  let detailRoutineId = null;   // ID of routine in detail screen, null for new
+  let detailExercises = [];     // Working copy of exercises
+  let detailMode = 'edit';      // 'edit' or 'overview'
+  let editingExerciseIdx = -1;
 
   // Wake lock
   let wakeLock = null;
@@ -47,8 +85,6 @@
       wakeLock = await navigator.wakeLock.request('screen');
       wakeLock.addEventListener('release', () => {
         wakeLock = null;
-        // Re-acquire only if page is still visible and player is open.
-        // Don't re-acquire when hidden — the visibilitychange handler does that.
         if (document.visibilityState === 'visible' && screens.player.classList.contains('active')) {
           requestWakeLock();
         }
@@ -63,7 +99,6 @@
     }
   }
 
-  // Re-acquire wake lock when the page becomes visible again
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && screens.player.classList.contains('active')) {
       requestWakeLock();
@@ -79,7 +114,7 @@
   let isPlaying = false;
   let timerInterval = null;
   let routineStartTime = null;
-  let isEphemeralSession = false; // true when playing a URL-imported routine
+  let isEphemeralSession = false;
 
   // ---------------------------------------------------------------------------
   // DOM refs
@@ -90,7 +125,7 @@
 
   const screens = {
     list:     $('#screen-list'),
-    editor:   $('#screen-editor'),
+    detail:   $('#screen-detail'),
     player:   $('#screen-player'),
     complete: $('#screen-complete'),
   };
@@ -99,16 +134,16 @@
   const routineListEl       = $('#routine-list');
   const btnNewRoutine       = $('#btn-new-routine');
 
-  // Editor screen
-  const btnEditorBack       = $('#btn-editor-back');
-  const btnSaveRoutine      = $('#btn-save-routine');
-  const editorTitleEl       = $('#editor-title');
-  const routineNameInput    = $('#routine-name');
-  const exerciseListEditor  = $('#exercise-list-editor');
-  const btnAddExercise      = $('#btn-add-exercise');
+  // Detail screen
+  const btnDetailBack       = $('#btn-detail-back');
+  const btnDetailStart      = $('#btn-detail-start');
+  const detailNameInput     = $('#detail-routine-name');
+  const detailExerciseList  = $('#detail-exercise-list');
+  const btnDetailAdd        = $('#btn-detail-add');
 
   // Player screen
   const btnPlayerBack       = $('#btn-player-back');
+  const btnPlayerOverview   = $('#btn-player-overview');
   const playerRoutineName   = $('#player-routine-name');
   const playerProgress      = $('#player-progress');
   const timerRingProgress   = $('#timer-ring-progress');
@@ -149,48 +184,40 @@
   const btnConfirmOk        = $('#btn-confirm-ok');
 
   // ---------------------------------------------------------------------------
-  // Audio – Web Audio API beeps (no external files)
+  // SVG icons (reused in templates)
+  // ---------------------------------------------------------------------------
+
+  const ICON_GRIP = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg>`;
+  const ICON_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+  const ICON_CHEVRON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
+
+  // ---------------------------------------------------------------------------
+  // Audio
   // ---------------------------------------------------------------------------
 
   let audioCtx = null;
   let suspendTimer = null;
 
-  /** Lazy-init AudioContext (must be triggered by user gesture). */
   function ensureAudioCtx() {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      // Tell Safari this is short transient audio, not music playback.
-      // This avoids pausing Spotify / background music.
       if ('audioSession' in navigator) {
         navigator.audioSession.type = 'transient';
       }
     }
-    // Resume if suspended or interrupted (Safari requirement)
     if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
       audioCtx.resume();
     }
-    // Cancel any pending suspend so beep plays fully
     clearTimeout(suspendTimer);
   }
 
-  /**
-   * Suspend AudioContext shortly after beeping to release audio focus.
-   * This lets background music (Spotify etc.) resume quickly.
-   */
   function scheduleSuspend(delayMs) {
     clearTimeout(suspendTimer);
     suspendTimer = setTimeout(() => {
-      if (audioCtx && audioCtx.state === 'running') {
-        audioCtx.suspend();
-      }
+      if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
     }, delayMs);
   }
 
-  /**
-   * Play a short beep.
-   * @param {number} freq  – Frequency in Hz (default 880)
-   * @param {number} dur   – Duration in seconds (default 0.15)
-   */
   function beep(freq = 880, dur = 0.15) {
     try {
       ensureAudioCtx();
@@ -204,14 +231,10 @@
       gain.connect(audioCtx.destination);
       osc.start(audioCtx.currentTime);
       osc.stop(audioCtx.currentTime + dur);
-      // Auto-suspend after beep finishes to release audio focus
       scheduleSuspend((dur + 0.1) * 1000);
-    } catch (_) {
-      // Silently fail if audio is unavailable
-    }
+    } catch (_) {}
   }
 
-  /** Play 3 short beeps to signal routine complete. */
   function beepComplete() {
     beep(880, 0.15);
     setTimeout(() => beep(880, 0.15), 250);
@@ -219,7 +242,6 @@
     scheduleSuspend(900);
   }
 
-  /** 3 ascending beeps – signals start of a work/exercise phase. */
   function beepWork() {
     beep(660, 0.12);
     setTimeout(() => beep(880, 0.12), 180);
@@ -227,14 +249,12 @@
     scheduleSuspend(650);
   }
 
-  /** 2 low beeps – signals start of a rest phase. */
   function beepRest() {
     beep(440, 0.15);
     setTimeout(() => beep(440, 0.15), 250);
     scheduleSuspend(500);
   }
 
-  /** Single gentle beep – signals the midpoint of a timed exercise. */
   function beepMidpoint() {
     beep(660, 0.25);
   }
@@ -250,9 +270,8 @@
     } catch (_) {
       routines = [];
     }
-    // Seed with default routine if storage is empty
     if (routines.length === 0) {
-      routines.push({ ...DEFAULT_ROUTINE });
+      routines.push({ ...DEFAULT_ROUTINE }, { ...DEFAULT_ROUTINE_2 });
       saveRoutines();
     }
   }
@@ -275,6 +294,20 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Utility
+  // ---------------------------------------------------------------------------
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function formatExerciseDetail(ex) {
+    return ex.type === 'time' ? `${ex.duration}s` : `${ex.reps} reps`;
+  }
+
+  // ---------------------------------------------------------------------------
   // Routine List rendering
   // ---------------------------------------------------------------------------
 
@@ -290,119 +323,364 @@
 
     routineListEl.innerHTML = routines.map((r) => {
       const exCount = r.exercises.length;
-      const totalSec = r.exercises.reduce((sum, e) => {
-        return sum + (e.type === 'time' ? e.duration : 0) + (e.rest || 0);
-      }, 0);
+      const totalSec = r.exercises.reduce((sum, e) =>
+        sum + (e.type === 'time' ? e.duration : 0) + (e.rest || 0), 0);
       const mins = Math.ceil(totalSec / 60);
 
       return `
-        <div class="routine-card" data-id="${r.id}">
-          <div class="routine-card-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </div>
-          <div class="routine-card-info">
-            <div class="routine-card-name">${escapeHtml(r.name)}</div>
-            <div class="routine-card-meta">${exCount} exercise${exCount !== 1 ? 's' : ''} &middot; ~${mins} min</div>
-          </div>
-          <div class="routine-card-actions">
-            <button class="btn btn-icon btn-edit-routine" data-id="${r.id}" aria-label="Edit routine">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="btn btn-icon btn-delete-routine" data-id="${r.id}" aria-label="Delete routine">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-            </button>
+        <div class="swipe-container" data-id="${r.id}">
+          <div class="swipe-delete-zone">Delete</div>
+          <div class="routine-card swipe-content" data-id="${r.id}">
+            <div class="routine-card-info">
+              <div class="routine-card-name">${escapeHtml(r.name)}</div>
+              <div class="routine-card-meta">${exCount} exercise${exCount !== 1 ? 's' : ''} &middot; ~${mins} min</div>
+            </div>
+            <span class="routine-card-chevron">${ICON_CHEVRON}</span>
           </div>
         </div>`;
     }).join('');
+
+    initSwipe(routineListEl, '.swipe-container', (container) => {
+      const id = container.dataset.id;
+      const r = routines.find((x) => x.id === id);
+      showConfirm(`Delete "${r ? r.name : 'routine'}"?`, () => {
+        routines = routines.filter((x) => x.id !== id);
+        saveRoutines();
+        renderRoutineList();
+      });
+    });
   }
 
   // ---------------------------------------------------------------------------
-  // Editor
+  // Detail screen (combined editor + overview)
   // ---------------------------------------------------------------------------
 
-  function openEditor(routineId) {
+  function openDetail(routineId) {
+    detailMode = 'edit';
     if (routineId) {
       const r = routines.find((x) => x.id === routineId);
       if (!r) return;
-      editingRoutineId = routineId;
-      routineNameInput.value = r.name;
-      editorExercises = JSON.parse(JSON.stringify(r.exercises));
-      editorTitleEl.textContent = 'Edit Routine';
+      detailRoutineId = routineId;
+      detailNameInput.value = r.name;
+      detailExercises = JSON.parse(JSON.stringify(r.exercises));
     } else {
-      editingRoutineId = null;
-      routineNameInput.value = '';
-      editorExercises = [];
-      editorTitleEl.textContent = 'New Routine';
+      detailRoutineId = null;
+      detailNameInput.value = '';
+      detailExercises = [];
     }
-    renderEditorExercises();
-    showScreen('editor');
+    detailNameInput.readOnly = false;
+    btnDetailStart.textContent = 'Start';
+    btnDetailStart.style.display = '';
+    btnDetailAdd.style.display = '';
+    renderDetailExercises();
+    showScreen('detail');
   }
 
-  function renderEditorExercises() {
-    if (editorExercises.length === 0) {
-      exerciseListEditor.innerHTML = `
+  function openOverview() {
+    if (!currentRoutine) return;
+    detailMode = 'overview';
+    detailRoutineId = currentRoutine.id;
+    detailNameInput.value = currentRoutine.name;
+    detailNameInput.readOnly = true;
+    detailExercises = currentRoutine.exercises;
+    btnDetailStart.textContent = 'Resume';
+    btnDetailStart.style.display = '';
+    btnDetailAdd.style.display = 'none';
+    renderDetailExercises();
+    showScreen('detail');
+  }
+
+  function renderDetailExercises() {
+    const isOverview = detailMode === 'overview';
+
+    if (!isOverview && detailExercises.length === 0) {
+      detailExerciseList.innerHTML = `
         <div class="empty-state">
-          <p>No exercises yet. Tap <strong>+ Add</strong> to get started.</p>
+          <p>No exercises yet. Tap <strong>+ Add Exercise</strong> below.</p>
         </div>`;
       return;
     }
 
-    exerciseListEditor.innerHTML = editorExercises.map((ex, idx) => {
-      const detail = ex.type === 'time'
-        ? `${ex.duration}s`
-        : `${ex.reps} reps`;
-      const restLabel = ex.rest > 0 ? ` + ${ex.rest}s rest` : '';
+    detailExerciseList.innerHTML = detailExercises.map((ex, idx) => {
+      const badge = formatExerciseDetail(ex);
+
+      if (isOverview) {
+        let cls = '';
+        if (idx < currentExIdx) cls = 'done';
+        else if (idx === currentExIdx) cls = 'current';
+
+        const statusIcon = idx < currentExIdx ? ICON_CHECK : `${idx + 1}`;
+
+        return `
+          <div class="exercise-item ${cls}" data-idx="${idx}">
+            <div class="exercise-item-content">
+              <span class="exercise-item-status">${statusIcon}</span>
+              <span class="exercise-item-name">${escapeHtml(ex.name)}</span>
+              <span class="exercise-item-badge">${badge}</span>
+            </div>
+          </div>`;
+      }
 
       return `
-        <div class="exercise-row" data-idx="${idx}">
-          <div class="exercise-row-info">
-            <div class="exercise-row-name">${escapeHtml(ex.name)}</div>
-            <div class="exercise-row-detail">${detail}${restLabel}</div>
-          </div>
-          <div class="exercise-row-actions">
-            <button class="btn btn-icon btn-edit-exercise" data-idx="${idx}" aria-label="Edit exercise">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="btn btn-icon btn-delete-exercise" data-idx="${idx}" aria-label="Delete exercise">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-            </button>
-            ${idx > 0 ? `<button class="btn btn-icon btn-move-up" data-idx="${idx}" aria-label="Move up">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-            </button>` : ''}
-            ${idx < editorExercises.length - 1 ? `<button class="btn btn-icon btn-move-down" data-idx="${idx}" aria-label="Move down">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>` : ''}
+        <div class="exercise-item" data-idx="${idx}">
+          <div class="exercise-item-delete">Delete</div>
+          <div class="exercise-item-content swipe-content" data-idx="${idx}">
+            <span class="exercise-item-handle">${ICON_GRIP}</span>
+            <span class="exercise-item-name">${escapeHtml(ex.name)}</span>
+            <span class="exercise-item-badge">${badge}</span>
           </div>
         </div>`;
     }).join('');
+
+    if (!isOverview) {
+      initExerciseSwipe();
+      initDragReorder();
+    }
+
+    // Scroll current exercise into view in overview
+    if (isOverview) {
+      const currentEl = detailExerciseList.querySelector('.exercise-item.current');
+      if (currentEl) {
+        setTimeout(() => currentEl.scrollIntoView({ block: 'center', behavior: 'smooth' }), 100);
+      }
+    }
   }
 
-  function saveCurrentRoutine() {
-    const name = routineNameInput.value.trim();
-    if (!name) {
-      routineNameInput.focus();
-      return;
-    }
-    if (editorExercises.length === 0) {
-      return;
-    }
+  function saveDetailRoutine() {
+    const name = detailNameInput.value.trim();
+    if (!name || detailExercises.length === 0) return null;
 
-    if (editingRoutineId) {
-      const r = routines.find((x) => x.id === editingRoutineId);
+    if (detailRoutineId) {
+      const r = routines.find((x) => x.id === detailRoutineId);
       if (r) {
         r.name = name;
-        r.exercises = editorExercises;
+        r.exercises = JSON.parse(JSON.stringify(detailExercises));
       }
     } else {
+      detailRoutineId = generateId();
       routines.push({
-        id: generateId(),
+        id: detailRoutineId,
         name,
-        exercises: editorExercises,
+        exercises: JSON.parse(JSON.stringify(detailExercises)),
       });
     }
     saveRoutines();
     renderRoutineList();
+    return detailRoutineId;
+  }
+
+  function detailBack() {
+    if (detailMode === 'overview') {
+      showScreen('player');
+      return;
+    }
+    // Auto-save on back if there's content
+    if (detailNameInput.value.trim() && detailExercises.length > 0) {
+      saveDetailRoutine();
+    }
     showScreen('list');
+  }
+
+  function detailStart() {
+    if (detailMode === 'overview') {
+      showScreen('player');
+      return;
+    }
+    const id = saveDetailRoutine();
+    if (id) startRoutine(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Swipe to delete (generic)
+  // ---------------------------------------------------------------------------
+
+  function initSwipe(container, itemSelector, onDelete) {
+    let startX = 0;
+    let startY = 0;
+    let currentContent = null;
+    let currentContainer = null;
+    let isTracking = false;
+    let isHorizontal = null;
+
+    container.addEventListener('touchstart', (e) => {
+      const item = e.target.closest(itemSelector);
+      if (!item) return;
+      // Don't swipe from drag handles
+      if (e.target.closest('.exercise-item-handle')) return;
+
+      currentContainer = item;
+      currentContent = item.querySelector('.swipe-content');
+      if (!currentContent) return;
+
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      isTracking = true;
+      isHorizontal = null;
+
+      // Reset any other open swipes
+      container.querySelectorAll('.swipe-content').forEach((el) => {
+        if (el !== currentContent) {
+          el.style.transform = '';
+          el.classList.remove('swiping');
+        }
+      });
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      if (!isTracking || !currentContent) return;
+
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+
+      // Determine scroll direction on first significant move
+      if (isHorizontal === null) {
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+          isHorizontal = Math.abs(dx) > Math.abs(dy);
+        }
+        return;
+      }
+
+      if (!isHorizontal) return;
+
+      currentContent.classList.add('swiping');
+      const clamped = Math.max(Math.min(dx, 0), -120);
+      currentContent.style.transform = `translateX(${clamped}px)`;
+    }, { passive: true });
+
+    container.addEventListener('touchend', (e) => {
+      if (!isTracking || !currentContent) return;
+      isTracking = false;
+
+      const dx = e.changedTouches[0].clientX - startX;
+      currentContent.classList.remove('swiping');
+
+      if (dx < -SWIPE_THRESHOLD) {
+        // Show delete zone
+        currentContent.style.transform = `translateX(-90px)`;
+      } else {
+        currentContent.style.transform = '';
+      }
+      currentContent = null;
+    });
+
+    // Tap on delete zone
+    container.addEventListener('click', (e) => {
+      const deleteZone = e.target.closest('.swipe-delete-zone, .exercise-item-delete');
+      if (!deleteZone) return;
+      const item = deleteZone.closest(itemSelector) || deleteZone.parentElement;
+      if (item && onDelete) onDelete(item);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Swipe for exercise items in detail screen
+  // ---------------------------------------------------------------------------
+
+  function initExerciseSwipe() {
+    // Re-bind swipe for exercise items
+    initSwipe(detailExerciseList, '.exercise-item', (item) => {
+      const idx = parseInt(item.dataset.idx || item.querySelector('[data-idx]')?.dataset.idx, 10);
+      if (isNaN(idx)) return;
+      detailExercises.splice(idx, 1);
+      renderDetailExercises();
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Drag to reorder exercises
+  // ---------------------------------------------------------------------------
+
+  function initDragReorder() {
+    let dragIdx = -1;
+    let dragEl = null;
+    let placeholder = null;
+    let startY = 0;
+    let offsetY = 0;
+    let itemHeight = 0;
+    let containerRect = null;
+
+    detailExerciseList.addEventListener('touchstart', (e) => {
+      const handle = e.target.closest('.exercise-item-handle');
+      if (!handle) return;
+
+      const item = handle.closest('.exercise-item');
+      if (!item) return;
+
+      e.preventDefault();
+      dragIdx = parseInt(item.dataset.idx || item.querySelector('[data-idx]')?.dataset.idx, 10);
+      if (isNaN(dragIdx)) return;
+
+      const rect = item.getBoundingClientRect();
+      containerRect = detailExerciseList.getBoundingClientRect();
+      itemHeight = rect.height;
+      startY = e.touches[0].clientY;
+      offsetY = startY - rect.top;
+
+      // Create placeholder
+      placeholder = document.createElement('div');
+      placeholder.className = 'drag-placeholder';
+      placeholder.style.height = itemHeight + 'px';
+      item.parentNode.insertBefore(placeholder, item);
+
+      // Make item fixed/floating
+      dragEl = item;
+      dragEl.classList.add('dragging');
+      dragEl.style.width = rect.width + 'px';
+      dragEl.style.left = rect.left + 'px';
+      dragEl.style.top = rect.top + 'px';
+    }, { passive: false });
+
+    detailExerciseList.addEventListener('touchmove', (e) => {
+      if (!dragEl || !placeholder) return;
+      e.preventDefault();
+
+      const y = e.touches[0].clientY;
+      dragEl.style.top = (y - offsetY) + 'px';
+
+      // Determine new position
+      const items = [...detailExerciseList.querySelectorAll('.exercise-item:not(.dragging)')];
+      let newIdx = items.length;
+      for (let i = 0; i < items.length; i++) {
+        const rect = items[i].getBoundingClientRect();
+        if (y < rect.top + rect.height / 2) {
+          newIdx = i;
+          break;
+        }
+      }
+
+      // Move placeholder
+      if (newIdx >= items.length) {
+        detailExerciseList.appendChild(placeholder);
+      } else {
+        detailExerciseList.insertBefore(placeholder, items[newIdx]);
+      }
+    }, { passive: false });
+
+    detailExerciseList.addEventListener('touchend', () => {
+      if (!dragEl || !placeholder) return;
+
+      // Find where placeholder ended up
+      const allEls = [...detailExerciseList.children];
+      let newIdx = allEls.indexOf(placeholder);
+      // Adjust: dragging element is still in the list
+      if (newIdx > dragIdx) newIdx--;
+
+      // Reorder the data
+      if (newIdx !== dragIdx && newIdx >= 0) {
+        const [moved] = detailExercises.splice(dragIdx, 1);
+        detailExercises.splice(newIdx, 0, moved);
+      }
+
+      // Clean up
+      dragEl.classList.remove('dragging');
+      dragEl.style.cssText = '';
+      if (placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+      dragEl = null;
+      placeholder = null;
+      dragIdx = -1;
+
+      renderDetailExercises();
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -421,7 +699,7 @@
       exRepsInput.value = 10;
       exRestInput.value = 0;
     } else {
-      const ex = editorExercises[idx];
+      const ex = detailExercises[idx];
       exNameInput.value = ex.name;
       setExType(ex.type);
       exDurationInput.value = ex.duration || 30;
@@ -473,13 +751,13 @@
     };
 
     if (editingExerciseIdx === -1) {
-      editorExercises.push(ex);
+      detailExercises.push(ex);
     } else {
-      editorExercises[editingExerciseIdx] = ex;
+      detailExercises[editingExerciseIdx] = ex;
     }
 
     closeExerciseModal();
-    renderEditorExercises();
+    renderDetailExercises();
   }
 
   // ---------------------------------------------------------------------------
@@ -509,7 +787,7 @@
     const r = routines.find((x) => x.id === routineId);
     if (!r || r.exercises.length === 0) return;
 
-    ensureAudioCtx(); // warm up audio on user gesture
+    ensureAudioCtx();
 
     currentRoutine = JSON.parse(JSON.stringify(r));
     currentExIdx = 0;
@@ -529,38 +807,27 @@
     const ex = exercises[currentExIdx];
 
     playerProgress.textContent = `${currentExIdx + 1} of ${exercises.length}`;
-
-    // Clear rest phase class
     playerBody.classList.toggle('rest-phase', isRestPhase);
 
     if (isRestPhase) {
-      // Rest between exercises
       playerExerciseName.textContent = 'REST';
       timerLabel.textContent = 'REST';
       timerTypeLabel.textContent = '';
       timeRemaining = ex.rest;
       totalTime = ex.rest;
 
-      // Show next exercise preview
       const nextIdx = currentExIdx + 1;
-      if (nextIdx < exercises.length) {
-        playerNext.textContent = `Next: ${exercises[nextIdx].name}`;
-      } else {
-        playerNext.textContent = '';
-      }
+      playerNext.textContent = nextIdx < exercises.length
+        ? `Next: ${exercises[nextIdx].name}` : '';
 
-      // Hide reps button, show play/pause
       btnDoneReps.style.display = 'none';
       btnPlayPause.style.display = 'flex';
       updateTimerDisplay();
       setRingProgress(1);
     } else {
-      // Active exercise
       playerExerciseName.textContent = ex.name;
 
-      // Next exercise preview
       const hasRest = ex.rest > 0;
-      const nextIdx = currentExIdx + (hasRest ? 0 : 1); // if rest, rest is next; else next exercise
       if (!hasRest && currentExIdx + 1 < exercises.length) {
         playerNext.textContent = `Next: ${exercises[currentExIdx + 1].name}`;
       } else if (hasRest) {
@@ -579,14 +846,12 @@
         updateTimerDisplay();
         setRingProgress(1);
       } else {
-        // Reps-based
         timerLabel.textContent = 'REPS';
         timerValue.textContent = ex.reps;
         timerTypeLabel.textContent = 'reps';
-        timeRemaining = -1; // sentinel: no countdown
+        timeRemaining = -1;
         totalTime = -1;
         setRingProgress(1);
-        // Show "Done" button instead of play/pause
         btnDoneReps.style.display = '';
         btnPlayPause.style.display = 'none';
       }
@@ -608,7 +873,6 @@
   function tick() {
     if (!isPlaying) return;
     if (timeRemaining <= 0 && totalTime > 0) {
-      // Time ran out – advance
       advanceStep();
       return;
     }
@@ -617,17 +881,13 @@
       updateTimerDisplay();
       setRingProgress(timeRemaining / totalTime);
 
-      // Midpoint beep for timed exercises (switch sides reminder)
       if (!isRestPhase && totalTime >= 20) {
         const mid = Math.floor(totalTime / 2);
         if (timeRemaining === mid) beepMidpoint();
       }
 
-      if (timeRemaining <= 0) {
-        advanceStep();
-      }
+      if (timeRemaining <= 0) advanceStep();
     }
-    // For reps, we just wait for the user to tap Done
   }
 
   function advanceStep() {
@@ -635,19 +895,16 @@
     const ex = exercises[currentExIdx];
 
     if (!isRestPhase && ex.rest > 0) {
-      // Enter rest phase for this exercise
       isRestPhase = true;
       beepRest();
       loadCurrentStep();
       return;
     }
 
-    // Move to next exercise
     isRestPhase = false;
     currentExIdx++;
 
     if (currentExIdx >= exercises.length) {
-      // Routine complete
       finishRoutine();
       return;
     }
@@ -675,7 +932,7 @@
     isPlaying = !isPlaying;
     updatePlayPauseIcon();
     if (isPlaying) {
-      requestWakeLock(); // re-acquire in case it was dropped while paused
+      requestWakeLock();
       if (!timerInterval) startTimer();
     }
   }
@@ -696,7 +953,6 @@
     releaseWakeLock();
     currentRoutine = null;
     if (isEphemeralSession) {
-      // Navigate to the clean URL (no query params) to show normal list
       window.location.href = window.location.pathname;
       return;
     }
@@ -714,23 +970,9 @@
     timerValue.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
   }
 
-  /**
-   * Set the circular progress ring.
-   * @param {number} fraction – 0 (empty) to 1 (full)
-   */
   function setRingProgress(fraction) {
     const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, fraction)));
     timerRingProgress.style.strokeDashoffset = offset;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Utility
-  // ---------------------------------------------------------------------------
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
   }
 
   // ---------------------------------------------------------------------------
@@ -739,78 +981,30 @@
 
   function bindEvents() {
     // --- List screen ---
-    btnNewRoutine.addEventListener('click', () => openEditor(null));
-
+    btnNewRoutine.addEventListener('click', () => openDetail(null));
 
     routineListEl.addEventListener('click', (e) => {
-      // Edit button
-      const editBtn = e.target.closest('.btn-edit-routine');
-      if (editBtn) {
-        e.stopPropagation();
-        openEditor(editBtn.dataset.id);
-        return;
-      }
-      // Delete button
-      const delBtn = e.target.closest('.btn-delete-routine');
-      if (delBtn) {
-        e.stopPropagation();
-        const id = delBtn.dataset.id;
-        const r = routines.find((x) => x.id === id);
-        showConfirm(`Delete "${r ? r.name : 'routine'}"?`, () => {
-          routines = routines.filter((x) => x.id !== id);
-          saveRoutines();
-          renderRoutineList();
-        });
-        return;
-      }
-      // Card click – start routine
+      // Ignore if tapping delete zone
+      if (e.target.closest('.swipe-delete-zone')) return;
       const card = e.target.closest('.routine-card');
-      if (card) {
-        startRoutine(card.dataset.id);
-      }
+      if (card) openDetail(card.dataset.id);
     });
 
-    // --- Editor screen ---
-    btnEditorBack.addEventListener('click', () => {
-      showScreen('list');
-    });
+    // --- Detail screen ---
+    btnDetailBack.addEventListener('click', detailBack);
+    btnDetailStart.addEventListener('click', detailStart);
+    btnDetailAdd.addEventListener('click', () => openExerciseModal(-1));
 
-    btnSaveRoutine.addEventListener('click', saveCurrentRoutine);
-
-    btnAddExercise.addEventListener('click', () => openExerciseModal(-1));
-
-    exerciseListEditor.addEventListener('click', (e) => {
-      const editBtn = e.target.closest('.btn-edit-exercise');
-      if (editBtn) {
-        openExerciseModal(parseInt(editBtn.dataset.idx, 10));
-        return;
-      }
-      const delBtn = e.target.closest('.btn-delete-exercise');
-      if (delBtn) {
-        const idx = parseInt(delBtn.dataset.idx, 10);
-        editorExercises.splice(idx, 1);
-        renderEditorExercises();
-        return;
-      }
-      const upBtn = e.target.closest('.btn-move-up');
-      if (upBtn) {
-        const idx = parseInt(upBtn.dataset.idx, 10);
-        if (idx > 0) {
-          [editorExercises[idx - 1], editorExercises[idx]] =
-            [editorExercises[idx], editorExercises[idx - 1]];
-          renderEditorExercises();
-        }
-        return;
-      }
-      const downBtn = e.target.closest('.btn-move-down');
-      if (downBtn) {
-        const idx = parseInt(downBtn.dataset.idx, 10);
-        if (idx < editorExercises.length - 1) {
-          [editorExercises[idx], editorExercises[idx + 1]] =
-            [editorExercises[idx + 1], editorExercises[idx]];
-          renderEditorExercises();
-        }
-        return;
+    // Tap on exercise item content to edit (in edit mode)
+    detailExerciseList.addEventListener('click', (e) => {
+      if (detailMode !== 'edit') return;
+      // Don't open editor if tapping delete or handle
+      if (e.target.closest('.exercise-item-delete')) return;
+      if (e.target.closest('.exercise-item-handle')) return;
+      const content = e.target.closest('.exercise-item-content');
+      if (content) {
+        const idx = parseInt(content.dataset.idx, 10);
+        if (!isNaN(idx)) openExerciseModal(idx);
       }
     });
 
@@ -819,8 +1013,6 @@
     exTypeRepsBtn.addEventListener('click', () => setExType('reps'));
     btnModalCancel.addEventListener('click', closeExerciseModal);
     btnModalSave.addEventListener('click', saveExerciseFromModal);
-
-    // Close modal on overlay click
     modalExercise.addEventListener('click', (e) => {
       if (e.target === modalExercise) closeExerciseModal();
     });
@@ -837,6 +1029,7 @@
 
     // --- Player screen ---
     btnPlayerBack.addEventListener('click', exitPlayer);
+    btnPlayerOverview.addEventListener('click', openOverview);
     btnPlayPause.addEventListener('click', togglePlayPause);
     btnSkip.addEventListener('click', skipStep);
     btnDoneReps.addEventListener('click', () => {
@@ -855,12 +1048,10 @@
 
     // --- Keyboard shortcuts ---
     document.addEventListener('keydown', (e) => {
-      // Space to toggle play/pause in player
       if (screens.player.classList.contains('active')) {
         if (e.code === 'Space') {
           e.preventDefault();
           if (totalTime === -1) {
-            // Reps mode – act as Done
             beep(880, 0.15);
             advanceStep();
           } else {
@@ -880,13 +1071,9 @@
   }
 
   // ---------------------------------------------------------------------------
-  // URL parameter handling – ?routine=<base64> and ?help
+  // URL parameter handling
   // ---------------------------------------------------------------------------
 
-  /**
-   * Validate an imported routine object.
-   * Returns a sanitised routine (with generated id) or null if invalid.
-   */
   function validateImportedRoutine(obj) {
     if (!obj || typeof obj !== 'object') return null;
     if (typeof obj.name !== 'string' || obj.name.trim() === '') return null;
@@ -926,10 +1113,6 @@
     };
   }
 
-  /**
-   * Try to parse the ?routine=<base64> URL parameter.
-   * Returns a validated routine object or null.
-   */
   function parseRoutineFromURL() {
     const params = new URLSearchParams(window.location.search);
     const encoded = params.get('routine');
@@ -940,19 +1123,16 @@
       const obj = JSON.parse(json);
       const routine = validateImportedRoutine(obj);
       if (!routine) {
-        console.warn('Stretch Timer: imported routine failed validation');
+        console.warn('Stepwise: imported routine failed validation');
         return null;
       }
       return routine;
     } catch (e) {
-      console.warn('Stretch Timer: failed to decode/parse routine from URL', e);
+      console.warn('Stepwise: failed to decode/parse routine from URL', e);
       return null;
     }
   }
 
-  /**
-   * Start an ephemeral routine directly (not saved to localStorage).
-   */
   function startEphemeralRoutine(routine) {
     ensureAudioCtx();
     isEphemeralSession = true;
@@ -981,14 +1161,13 @@
 
     const importedRoutine = parseRoutineFromURL();
     if (importedRoutine) {
-      showScreen('list'); // ensure DOM is in correct state
+      showScreen('list');
       startEphemeralRoutine(importedRoutine);
     } else {
       showScreen('list');
     }
   }
 
-  // Start the app when the DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
