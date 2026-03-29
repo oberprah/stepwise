@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stretch Timer — URL API</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 1.5em; max-width: 700px; margin: 0 auto; }
+    h1 { margin-bottom: 0.2em; }
+    h2 { color: var(--color-primary); margin-top: 1.5em; }
+    pre { background: var(--color-surface); border: 1px solid var(--color-border);
+          border-radius: 8px; padding: 1em; overflow-x: auto; font-size: 0.9em; line-height: 1.5; }
+    code { font-family: 'SF Mono', 'Fira Code', Consolas, monospace; }
+    p { line-height: 1.6; color: var(--color-text-secondary); }
+    a { color: var(--color-primary); }
+    .subtitle { color: var(--color-text-muted); margin-top: 0; }
+  </style>
+</head>
+<body>
+
+<h1>Stretch Timer — URL API</h1>
+<p class="subtitle">Load routines via URL for AI agents and automation</p>
+
+<h2>Usage</h2>
+<p>
+  Append <code>?routine=&lt;base64&gt;</code> to the app URL to load a routine
+  directly into the player. The value is a <strong>base64-encoded JSON string</strong>.
+  The routine is ephemeral — it is not saved and will be gone on the next page load.
+</p>
+<pre><code>https://&lt;host&gt;/?routine=&lt;base64-encoded-json&gt;</code></pre>
+
+<h2>JSON Schema</h2>
+<pre><code>{
+  "name": "string (required, max 50 chars)",
+  "exercises": [
+    {
+      "name":     "string (required, max 60 chars)",
+      "type":     "time" | "reps" (required),
+      "duration": number (seconds, 5–600, required when type="time"),
+      "reps":     number (1–200, required when type="reps"),
+      "rest":     number (seconds, 0–120, optional, default 0)
+    }
+  ]
+}</code></pre>
+<p>
+  No <code>id</code> field needed — one is generated automatically.
+  At least one exercise is required.
+  Fields irrelevant to the type (e.g. <code>duration</code> for <code>reps</code>) are ignored.
+</p>
+
+<h2>Example</h2>
+<p>Routine JSON:</p>
+<pre><code>{
+  "name": "Quick Stretch",
+  "exercises": [
+    { "name": "Neck Rolls",        "type": "reps", "reps": 10, "rest": 5 },
+    { "name": "Hamstring Stretch",  "type": "time", "duration": 30, "rest": 10 },
+    { "name": "Deep Breathing",     "type": "time", "duration": 60 }
+  ]
+}</code></pre>
+
+<p>Base64 encode and append to URL:</p>
+<pre><code>echo '{"name":"Quick Stretch","exercises":[{"name":"Neck Rolls","type":"reps","reps":10,"rest":5},{"name":"Hamstring Stretch","type":"time","duration":30,"rest":10},{"name":"Deep Breathing","type":"time","duration":60}]}' | base64</code></pre>
+
+<p>Or in JavaScript:</p>
+<pre><code>const url = baseURL + '?routine=' + btoa(JSON.stringify(routine));</code></pre>
+
+<h2>For AI Agents</h2>
+<p>
+  To create and launch a stretch routine:
+</p>
+<ol>
+  <li>Build a routine JSON object matching the schema above</li>
+  <li>Base64-encode the JSON string</li>
+  <li>Open <code>&lt;app-url&gt;?routine=&lt;encoded&gt;</code> in the user's browser</li>
+</ol>
+<p>The player starts immediately — no user interaction needed beyond the initial page load.</p>
+
+<p><a href="./">← Back to Stretch Timer</a></p>
+
+</body>
+</html>

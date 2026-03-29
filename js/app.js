@@ -948,11 +948,6 @@
     }
   }
 
-  /** Whether the current URL has ?help */
-  function hasHelpParam() {
-    return new URLSearchParams(window.location.search).has('help');
-  }
-
   /**
    * Start an ephemeral routine directly (not saved to localStorage).
    */
@@ -974,66 +969,10 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Help – JSON schema for AI agents / automation
-  // ---------------------------------------------------------------------------
-
-  function renderHelpPage() {
-    const exampleRoutine = {
-      name: 'Quick Stretch',
-      exercises: [
-        { name: 'Neck Rolls', type: 'reps', reps: 10, rest: 5 },
-        { name: 'Hamstring Stretch', type: 'time', duration: 30, rest: 10 },
-        { name: 'Deep Breathing', type: 'time', duration: 60 },
-      ],
-    };
-
-    const baseURL = window.location.origin + window.location.pathname;
-
-    const help = {
-      api: 'Stretch Timer URL API',
-      usage: 'Append ?routine=<base64> to the app URL. The value is a base64-encoded JSON string. The routine loads directly into the player (ephemeral, not saved).',
-      base_url: baseURL,
-      schema: {
-        name: { type: 'string', required: true, max_length: 50 },
-        exercises: {
-          type: 'array',
-          min_items: 1,
-          items: {
-            name:     { type: 'string', required: true, max_length: 60 },
-            type:     { type: 'string', required: true, enum: ['time', 'reps'] },
-            duration: { type: 'number', unit: 'seconds', min: 5, max: 600, required_when: 'type=time' },
-            reps:     { type: 'number', min: 1, max: 200, required_when: 'type=reps' },
-            rest:     { type: 'number', unit: 'seconds', min: 0, max: 120, default: 0 },
-          },
-        },
-      },
-      example: {
-        routine_json: exampleRoutine,
-        encoded_url: baseURL + '?routine=' + btoa(JSON.stringify(exampleRoutine)),
-      },
-    };
-
-    document.body.style.margin = '0';
-    document.body.style.padding = '1em';
-    document.body.style.fontFamily = 'monospace';
-    document.body.style.whiteSpace = 'pre-wrap';
-    document.body.style.wordBreak = 'break-word';
-    document.body.style.background = '#1a1a1a';
-    document.body.style.color = '#e0e0e0';
-    document.body.textContent = JSON.stringify(help, null, 2);
-  }
-
-  // ---------------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------------
 
   function init() {
-    // Check URL parameters before normal startup
-    if (hasHelpParam()) {
-      renderHelpPage();
-      return;
-    }
-
     loadRoutines();
     renderRoutineList();
     bindEvents();
