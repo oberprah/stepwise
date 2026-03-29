@@ -615,11 +615,6 @@
       updateTimerDisplay();
       setRingProgress(timeRemaining / totalTime);
 
-      // Countdown beep: ascending pitch for 3, 2, 1
-      if (timeRemaining === 3) beep(550, 0.15);
-      else if (timeRemaining === 2) beep(660, 0.15);
-      else if (timeRemaining === 1) beep(880, 0.2);
-
       // Midpoint beep for timed exercises (switch sides reminder)
       if (!isRestPhase && totalTime >= 20) {
         const mid = Math.floor(totalTime / 2);
@@ -738,18 +733,6 @@
     // --- List screen ---
     btnNewRoutine.addEventListener('click', () => openEditor(null));
 
-    // Test sound button
-    document.getElementById('btn-test-sound').addEventListener('click', () => {
-      ensureAudioCtx();
-      beep(880, 0.3);
-      const btn = document.getElementById('btn-test-sound');
-      btn.classList.add('sound-ok');
-      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg> Sound OK';
-      setTimeout(() => {
-        btn.classList.remove('sound-ok');
-        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg> Test Sound';
-      }, 2000);
-    });
 
     routineListEl.addEventListener('click', (e) => {
       // Edit button
