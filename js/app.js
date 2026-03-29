@@ -47,8 +47,9 @@
       wakeLock = await navigator.wakeLock.request('screen');
       wakeLock.addEventListener('release', () => {
         wakeLock = null;
-        // Re-acquire if the system dropped it while we're still playing
-        if (isPlaying && screens.player.classList.contains('active')) {
+        // Re-acquire only if page is still visible and player is open.
+        // Don't re-acquire when hidden — the visibilitychange handler does that.
+        if (document.visibilityState === 'visible' && screens.player.classList.contains('active')) {
           requestWakeLock();
         }
       });
@@ -64,7 +65,7 @@
 
   // Re-acquire wake lock when the page becomes visible again
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && isPlaying && screens.player.classList.contains('active')) {
+    if (document.visibilityState === 'visible' && screens.player.classList.contains('active')) {
       requestWakeLock();
     }
   });
@@ -673,8 +674,9 @@
   function togglePlayPause() {
     isPlaying = !isPlaying;
     updatePlayPauseIcon();
-    if (isPlaying && !timerInterval) {
-      startTimer();
+    if (isPlaying) {
+      requestWakeLock(); // re-acquire in case it was dropped while paused
+      if (!timerInterval) startTimer();
     }
   }
 
