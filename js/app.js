@@ -78,6 +78,7 @@
   let isPlaying = false;
   let timerInterval = null;
   let routineStartTime = null;
+  let isEphemeralSession = false; // true when playing a URL-imported routine
 
   // ---------------------------------------------------------------------------
   // DOM refs
@@ -692,6 +693,11 @@
     isPlaying = false;
     releaseWakeLock();
     currentRoutine = null;
+    if (isEphemeralSession) {
+      // Navigate to the clean URL (no query params) to show normal list
+      window.location.href = window.location.pathname;
+      return;
+    }
     showScreen('list');
   }
 
@@ -838,6 +844,10 @@
 
     // --- Complete screen ---
     btnCompleteBack.addEventListener('click', () => {
+      if (isEphemeralSession) {
+        window.location.href = window.location.pathname;
+        return;
+      }
       showScreen('list');
     });
 
@@ -868,14 +878,173 @@
   }
 
   // ---------------------------------------------------------------------------
+  // URL parameter handling – ?routine=<base64> and ?help
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Validate an imported routine object.
+   * Returns a sanitised routine (with generated id) or null if invalid.
+   */
+  function validateImportedRoutine(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (typeof obj.name !== 'string' || obj.name.trim() === '') return null;
+    if (!Array.isArray(obj.exercises) || obj.exercises.length === 0) return null;
+
+    const cleanExercises = [];
+    for (const ex of obj.exercises) {
+      if (!ex || typeof ex !== 'object') return null;
+      if (typeof ex.name !== 'string' || ex.name.trim() === '') return null;
+      if (ex.type !== 'time' && ex.type !== 'reps') return null;
+
+      const clean = {
+        name: ex.name.trim().slice(0, 60),
+        type: ex.type,
+        duration: 0,
+        reps: 0,
+        rest: Math.max(0, Math.min(120, parseInt(ex.rest, 10) || 0)),
+      };
+
+      if (ex.type === 'time') {
+        const dur = parseInt(ex.duration, 10);
+        if (!dur || dur < 5) return null;
+        clean.duration = Math.min(600, dur);
+      } else {
+        const reps = parseInt(ex.reps, 10);
+        if (!reps || reps < 1) return null;
+        clean.reps = Math.min(200, reps);
+      }
+
+      cleanExercises.push(clean);
+    }
+
+    return {
+      id: generateId(),
+      name: obj.name.trim().slice(0, 50),
+      exercises: cleanExercises,
+    };
+  }
+
+  /**
+   * Try to parse the ?routine=<base64> URL parameter.
+   * Returns a validated routine object or null.
+   */
+  function parseRoutineFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get('routine');
+    if (!encoded) return null;
+
+    try {
+      const json = atob(encoded);
+      const obj = JSON.parse(json);
+      const routine = validateImportedRoutine(obj);
+      if (!routine) {
+        console.warn('Stretch Timer: imported routine failed validation');
+        return null;
+      }
+      return routine;
+    } catch (e) {
+      console.warn('Stretch Timer: failed to decode/parse routine from URL', e);
+      return null;
+    }
+  }
+
+  /** Whether the current URL has ?help */
+  function hasHelpParam() {
+    return new URLSearchParams(window.location.search).has('help');
+  }
+
+  /**
+   * Start an ephemeral routine directly (not saved to localStorage).
+   */
+  function startEphemeralRoutine(routine) {
+    ensureAudioCtx();
+    isEphemeralSession = true;
+
+    currentRoutine = JSON.parse(JSON.stringify(routine));
+    currentExIdx = 0;
+    isRestPhase = false;
+    isPlaying = true;
+    routineStartTime = Date.now();
+
+    requestWakeLock();
+    playerRoutineName.textContent = currentRoutine.name;
+    showScreen('player');
+    loadCurrentStep();
+    startTimer();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Help – JSON schema for AI agents / automation
+  // ---------------------------------------------------------------------------
+
+  function renderHelpPage() {
+    const exampleRoutine = {
+      name: 'Quick Stretch',
+      exercises: [
+        { name: 'Neck Rolls', type: 'reps', reps: 10, rest: 5 },
+        { name: 'Hamstring Stretch', type: 'time', duration: 30, rest: 10 },
+        { name: 'Deep Breathing', type: 'time', duration: 60 },
+      ],
+    };
+
+    const baseURL = window.location.origin + window.location.pathname;
+
+    const help = {
+      api: 'Stretch Timer URL API',
+      usage: 'Append ?routine=<base64> to the app URL. The value is a base64-encoded JSON string. The routine loads directly into the player (ephemeral, not saved).',
+      base_url: baseURL,
+      schema: {
+        name: { type: 'string', required: true, max_length: 50 },
+        exercises: {
+          type: 'array',
+          min_items: 1,
+          items: {
+            name:     { type: 'string', required: true, max_length: 60 },
+            type:     { type: 'string', required: true, enum: ['time', 'reps'] },
+            duration: { type: 'number', unit: 'seconds', min: 5, max: 600, required_when: 'type=time' },
+            reps:     { type: 'number', min: 1, max: 200, required_when: 'type=reps' },
+            rest:     { type: 'number', unit: 'seconds', min: 0, max: 120, default: 0 },
+          },
+        },
+      },
+      example: {
+        routine_json: exampleRoutine,
+        encoded_url: baseURL + '?routine=' + btoa(JSON.stringify(exampleRoutine)),
+      },
+    };
+
+    document.body.style.margin = '0';
+    document.body.style.padding = '1em';
+    document.body.style.fontFamily = 'monospace';
+    document.body.style.whiteSpace = 'pre-wrap';
+    document.body.style.wordBreak = 'break-word';
+    document.body.style.background = '#1a1a1a';
+    document.body.style.color = '#e0e0e0';
+    document.body.textContent = JSON.stringify(help, null, 2);
+  }
+
+  // ---------------------------------------------------------------------------
   // Init
   // ---------------------------------------------------------------------------
 
   function init() {
+    // Check URL parameters before normal startup
+    if (hasHelpParam()) {
+      renderHelpPage();
+      return;
+    }
+
     loadRoutines();
     renderRoutineList();
     bindEvents();
-    showScreen('list');
+
+    const importedRoutine = parseRoutineFromURL();
+    if (importedRoutine) {
+      showScreen('list'); // ensure DOM is in correct state
+      startEphemeralRoutine(importedRoutine);
+    } else {
+      showScreen('list');
+    }
   }
 
   // Start the app when the DOM is ready
