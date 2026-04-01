@@ -101,6 +101,9 @@
   let editingExerciseIdx = -1;
   let editingGroupIdx = -1;     // Which group the exercise modal targets (-1 = top-level)
   let editingGroupItemIdx = -1; // Which group is being edited in the group modal (-1 = new)
+  let detailSwipeAC = null;     // AbortController for detail list swipe listeners
+  let detailDragAC = null;      // AbortController for detail list drag listeners
+  let routineSwipeAC = null;    // AbortController for routine list swipe listeners
 
   // Wake lock
   let wakeLock = null;
@@ -475,6 +478,8 @@
         </div>`;
     }).join('');
 
+    if (routineSwipeAC) routineSwipeAC.abort();
+    routineSwipeAC = new AbortController();
     initSwipe(routineListEl, '.swipe-container', (container) => {
       const id = container.dataset.id;
       const r = routines.find((x) => x.id === id);
@@ -483,7 +488,7 @@
         saveRoutines();
         renderRoutineList();
       });
-    });
+    }, routineSwipeAC.signal);
   }
 
   // ---------------------------------------------------------------------------
@@ -726,7 +731,7 @@
   // Swipe to delete (generic)
   // ---------------------------------------------------------------------------
 
-  function initSwipe(container, itemSelector, onDelete) {
+  function initSwipe(container, itemSelector, onDelete, signal) {
     let startX = 0;
     let startY = 0;
     let currentContent = null;
@@ -756,7 +761,7 @@
           el.classList.remove('swiping');
         }
       });
-    }, { passive: true });
+    }, { passive: true, signal });
 
     container.addEventListener('touchmove', (e) => {
       if (!isTracking || !currentContent) return;
@@ -777,7 +782,7 @@
       currentContent.classList.add('swiping');
       const clamped = Math.max(Math.min(dx, 0), -120);
       currentContent.style.transform = `translateX(${clamped}px)`;
-    }, { passive: true });
+    }, { passive: true, signal });
 
     container.addEventListener('touchend', (e) => {
       if (!isTracking || !currentContent) return;
@@ -793,7 +798,7 @@
         currentContent.style.transform = '';
       }
       currentContent = null;
-    });
+    }, { signal });
 
     // Tap on delete zone
     container.addEventListener('click', (e) => {
@@ -801,7 +806,7 @@
       if (!deleteZone) return;
       const item = deleteZone.closest(itemSelector) || deleteZone.parentElement;
       if (item && onDelete) onDelete(item);
-    });
+    }, { signal });
   }
 
   // ---------------------------------------------------------------------------
@@ -809,6 +814,9 @@
   // ---------------------------------------------------------------------------
 
   function initExerciseSwipe() {
+    if (detailSwipeAC) detailSwipeAC.abort();
+    detailSwipeAC = new AbortController();
+
     // Swipe for standalone exercise items and group exercises
     initSwipe(detailExerciseList, '.exercise-item', (item) => {
       const groupIdx = parseInt(item.dataset.groupIdx, 10);
@@ -827,7 +835,7 @@
         detailItems.splice(idx, 1);
       }
       renderDetailExercises();
-    });
+    }, detailSwipeAC.signal);
 
     // Swipe for group headers (delete whole group)
     initSwipe(detailExerciseList, '.group-header', (item) => {
@@ -835,7 +843,7 @@
       if (isNaN(idx)) return;
       detailItems.splice(idx, 1);
       renderDetailExercises();
-    });
+    }, detailSwipeAC.signal);
   }
 
   // ---------------------------------------------------------------------------
@@ -843,6 +851,10 @@
   // ---------------------------------------------------------------------------
 
   function initDragReorder() {
+    if (detailDragAC) detailDragAC.abort();
+    detailDragAC = new AbortController();
+    const signal = detailDragAC.signal;
+
     let dragIdx = -1;
     let dragGroupIdx = -1;      // -1 = top-level drag, >= 0 = within-group drag
     let dragExIdx = -1;
@@ -852,6 +864,22 @@
     let offsetY = 0;
     let itemHeight = 0;
     let dragContainer = null;   // the container we're reordering within
+
+    function cleanupDrag() {
+      if (dragEl) {
+        dragEl.classList.remove('dragging');
+        dragEl.style.cssText = '';
+      }
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.removeChild(placeholder);
+      }
+      dragEl = null;
+      placeholder = null;
+      dragIdx = -1;
+      dragGroupIdx = -1;
+      dragExIdx = -1;
+      dragContainer = null;
+    }
 
     detailExerciseList.addEventListener('touchstart', (e) => {
       const handle = e.target.closest('.exercise-item-handle');
@@ -919,7 +947,7 @@
         dragEl.style.left = rect.left + 'px';
         dragEl.style.top = rect.top + 'px';
       }
-    }, { passive: false });
+    }, { passive: false, signal });
 
     detailExerciseList.addEventListener('touchmove', (e) => {
       if (!dragEl || !placeholder || !dragContainer) return;
@@ -947,7 +975,7 @@
       } else {
         dragContainer.insertBefore(placeholder, items[newIdx]);
       }
-    }, { passive: false });
+    }, { passive: false, signal });
 
     detailExerciseList.addEventListener('touchend', () => {
       if (!dragEl || !placeholder || !dragContainer) return;
@@ -984,18 +1012,13 @@
       }
 
       // Clean up
-      dragEl.classList.remove('dragging');
-      dragEl.style.cssText = '';
-      if (placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
-      dragEl = null;
-      placeholder = null;
-      dragIdx = -1;
-      dragGroupIdx = -1;
-      dragExIdx = -1;
-      dragContainer = null;
-
+      cleanupDrag();
       renderDetailExercises();
-    });
+    }, { signal });
+
+    detailExerciseList.addEventListener('touchcancel', () => {
+      cleanupDrag();
+    }, { signal });
   }
 
   // ---------------------------------------------------------------------------
