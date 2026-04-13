@@ -380,6 +380,12 @@
   function showScreen(name) {
     Object.values(screens).forEach((s) => s.classList.remove('active'));
     screens[name].classList.add('active');
+
+    // If returning from Overview to Player during an active session,
+    // re-request wake lock in case it was released while Player was hidden.
+    if (name === 'player' && currentRoutine) {
+      requestWakeLock();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1274,6 +1280,10 @@
       setRingProgress(1);
       btnDoneReps.style.display = '';
       btnPlayPause.style.display = 'none';
+
+      // Rep steps do not have a running countdown, so refresh wake lock
+      // when entering them to keep the screen awake throughout the set.
+      requestWakeLock();
     }
 
     updatePlayPauseIcon();
